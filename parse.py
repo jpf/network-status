@@ -44,6 +44,7 @@ def parse_ping(line):
     else:
         result = {
             'error': True,
+            'success': False,
             'status': '[UNRECOGNIZED LINE] ' + line
             }
     return result
