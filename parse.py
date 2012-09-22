@@ -4,7 +4,7 @@ import fileinput
 def parse_ping(line):
     reply = re.compile('^(\d+) bytes from ([0-9\.]+): icmp_seq=(\d+) ttl=(\d+) time=(\d+\.\d+) ms')
     # 64 bytes from 4.2.2.2: icmp_seq=269 ttl=57 time=33.817 ms
-    if 'bytes from' in line:
+    if '64 bytes from' in line:
         match = reply.match(line)
         results = match.groups()
         result = {
