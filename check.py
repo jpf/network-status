@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #filters output
 import subprocess
@@ -5,6 +6,7 @@ from parse import parse_ping
 from avg import cumulative_average, windowed_average
 from termcolor import colored
 import fileinput
+import sys
 
 trend_icon = {
   'up': u'↑',
@@ -25,7 +27,10 @@ class trending:
   def update(self, value):
     self.value = self.avg.calculate(value)
     self.historical_value = self.historical_avg.calculate(value)
-    self.trend = float(self.value) / float(self.historical_value)
+    if float(self.historical_value) == 0.0:
+      self.trend = 0 #FIXME: is this right?
+    else:
+      self.trend = float(self.value) / float(self.historical_value)
 
   def icon(self):
     trend = self.trend
@@ -45,9 +50,12 @@ class trending:
       
 window = 30
 rtt_avg = windowed_average(window)
+rtt_trend = trending(window)
 pl_avg = windowed_average(window)
-trend = trending(window)
+pl_trend = trending(window)
+reset_timeout = int(window / 3)
 
+failure_count = 0
 count = 0
 
 def update(line):
@@ -56,8 +64,11 @@ def update(line):
   result = parse_ping(line)
   if result['status'] == 'got-reply':
     avg = rtt_avg.calculate(float(result['time']))
-    packet_loss = pl_avg.calculate(1)
-    trend.update(float(result['time']))
+
+    packet_loss = pl_avg.calculate(0)
+    pl_trend.update(packet_loss) # turn this into a var
+    
+    rtt_trend.update(float(result['time']))
     if avg <= 100:
       color = 'blue'
     if avg > 100:
@@ -65,29 +76,42 @@ def update(line):
     if avg > 500:
       color = 'red'
     out = colored("%.2f" % (avg), color)
-    trend.icon()
+    rtt_trend.icon()
   elif result['success'] == False:
+    rtt_avg.window = [] # reset
+    rtt_trend.update(1000000.0)
     out = colored(result['status'], 'red')
-    packet_loss = pl_avg.calculate(0)
+    packet_loss = pl_avg.calculate(1)
+    pl_trend.update(packet_loss) # turn this into a var
+
   if packet_loss <= 15:
     loss_color = 'blue'
   if packet_loss > 15:
     loss_color = 'yellow'
   if packet_loss > 50:
     loss_color = 'red'
-  out_loss = colored("%.2f%%" % ((1 - packet_loss) * 100), loss_color)
+  out_loss = colored("%.2f%%" % (packet_loss * 100), loss_color)
   line_end = '\r'
+  if debug:
+    print "%f" % pl_trend.trend
   # print " %s (%.2f%%) [%d/%d] %s%s" % (out, packet_loss, cumulative.count, count,
   #                                   ' ' * 10, line_end),
-  print " %s%s ms (%s) %s%s" % (trend.icon(), out, out_loss,
+  print " %s%s ms (%s%s) %s%s" % (rtt_trend.icon(), out, pl_trend.icon(), out_loss,
                                     ' ' * 10, line_end),
 
 debug = False
+#debug = True
 
+try:
+  print sys.argv[1]
+  debug = True
+except:
+  pass
 
 if debug:
   for line in fileinput.input():
     count += 1
+    print line
     update(line)
     print '\n',
   print ""
